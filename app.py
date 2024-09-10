@@ -14,8 +14,8 @@ from amazon_transcribe.model import TranscriptEvent, TranscriptResultStream
 
 from api_request_schema import api_request_list, get_model_ids
 
-model_id = os.getenv('MODEL_ID', 'amazon.titan-text-express-v1')
-aws_region = os.getenv('AWS_REGION', 'us-east-1')
+model_id = os.getenv('MODEL_ID', 'anthropic.claude-v2:1')
+aws_region = os.getenv('AWS_REGION', 'ap-northeast-1')
 
 if model_id not in get_model_ids():
     print(f'Error: Models ID {model_id} in not a valid model ID. Set MODEL_ID env var to one of {get_model_ids()}.')
@@ -23,7 +23,7 @@ if model_id not in get_model_ids():
 
 api_request = api_request_list[model_id]
 config = {
-    'log_level': 'none',  # One of: info, debug, none
+    'log_level': 'debug',  # One of: info, debug, none
     'last_speech': "If you have any other questions, please don't hesitate to ask. Have a great day!",
     'region': aws_region,
     'polly': {
@@ -316,7 +316,7 @@ class EventHandler(TranscriptResultStreamHandler):
     text = []
     last_time = 0
     sample_count = 0
-    max_sample_counter = 4
+    max_sample_counter = 20
 
     def __init__(self, transcript_result_stream: TranscriptResultStream, bedrock_wrapper):
         super().__init__(transcript_result_stream)
@@ -339,10 +339,11 @@ class EventHandler(TranscriptResultStreamHandler):
                 if EventHandler.sample_count == EventHandler.max_sample_counter:
 
                     if len(EventHandler.text) == 0:
-                        last_speech = config['last_speech']
-                        print(last_speech, flush=True)
-                        aws_polly_tts(last_speech)
-                        os._exit(0)  # exit from a child process
+                        # last_speech = config['last_speech']
+                        # print(last_speech, flush=True)
+                        # aws_polly_tts(last_speech)
+                        # os._exit(0)  # exit from a child process
+                        EventHandler.sample_count = 0
                     else:
                         input_text = ' '.join(EventHandler.text)
                         printer(f'\n[INFO] User input: {input_text}', 'info')

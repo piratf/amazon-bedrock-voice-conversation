@@ -32,7 +32,7 @@ api_request_list = {
         "contentType": "application/json",
         "accept": "*/*",
         "body": {
-            "prompt": "",
+            "prompt": "You are my friend and You'll watch me play league of legends and teach me how to play it better. You are a good player, you don't like long conversations, you can chat like human.",
             "max_tokens_to_sample": 300,
             "temperature": 0.5,
             "top_k": 250,
@@ -48,7 +48,7 @@ api_request_list = {
         "contentType": "application/json",
         "accept": "*/*",
         "body": {
-            "prompt": "",
+            "prompt": "You are my friend and You'll watch me play league of legends and teach me how to play it better. You are a good player, you don't like long conversations, you can chat like human.",
             "max_tokens_to_sample": 300,
             "temperature": 0.5,
             "top_k": 250,
