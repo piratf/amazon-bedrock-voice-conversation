@@ -137,7 +137,7 @@ class BedrockWrapper:
         self.speaking = True
 
         try:
-            response_stream = self.bedrock_agent.process(text)
+            response_stream, response_queue = self.bedrock_agent.process(text)
             
             logger.debug('Capturing Bedrock Agent response stream')
             
@@ -150,11 +150,17 @@ class BedrockWrapper:
 
             reader.close()
 
+            # Get the full response from the queue
+            full_response = response_queue.get()
+            logger.debug(f"Final question: {text}")
+            logger.debug(f"Final response: {full_response}")
+            # Add the full response to the conversation context
+            self.bedrock_agent.context.add_turn("Final Response", "", text, full_response)
+
         except Exception as e:
             logger.exception("An error occurred during Bedrock Agent processing:")
-            traceback.print_exc()  # This will print the full traceback to the console or log file
+            traceback.print_exc()
             
-            # Optionally, you can add more specific error handling here
             if isinstance(e, boto3.exceptions.Boto3Error):
                 logger.error("AWS Boto3 related error occurred. Please check your AWS credentials and permissions.")
             elif isinstance(e, json.JSONDecodeError):

@@ -4,6 +4,8 @@ from conversation_context import ConversationContext
 from logger import logger
 from config import config
 from bedrock_knowledge_base import BedrockKnowledgeBase
+import queue
+import threading
 
 class BedrockAgent:
     def __init__(self, bedrock_runtime):
@@ -18,7 +20,6 @@ class BedrockAgent:
 
         # Step 1: Analyze the input
         json_content = self._analyze_input(corrected_text)
-        logger.debug(f"JSON content: {json_content}")
 
         # Parse the extracted JSON content
         try:
@@ -80,22 +81,16 @@ Example output format:
         return self._invoke_bedrock(prompt, turn_type="Analysis", system_prompt="", is_stream=False, model_id="anthropic.claude-instant-v1")
 
     def _chat_with_user(self, text):
-        return self._invoke_bedrock(text, turn_type="Chat", system_prompt="You are a friendly AI assistant.", is_stream=True)
+        return self._invoke_bedrock_with_queue(text, turn_type="Final Ask", system_prompt="You are a friendly AI assistant.", is_stream=True)
 
     def _solve_question(self, text):
-        # Step 1: Analyze if knowledge bases are needed
-        # kb_analysis = self._analyze_knowledge_base_need(text)
-
-        # Mock kb_analysis data for testing
         kb_analysis = {
             "kb_needed": True,
             "kb_ids": ["FQYOEZO3D0"],
         }
 
-        # Step 2: Fetch from knowledge bases if needed
         kb_content = self._fetch_from_knowledge_bases(kb_analysis, text) if kb_analysis['kb_needed'] else ""
 
-        # Step 3: Combine question with KB content and solve
         enhanced_prompt = f"""You're a League of Legends expert. Provide the shortest possible accurate answer:
 
 Question: {text}
@@ -112,7 +107,7 @@ Instructions:
 6. If the question cannot be answered with the given information, explain why and suggest what additional information might be needed.
 
 Answer:"""
-        return self._invoke_bedrock(enhanced_prompt, turn_type="Question", system_prompt="You are a knowledgeable and enthusiastic League of Legends expert, eager to help players understand the game better.", is_stream=True)
+        return self._invoke_bedrock_with_queue(enhanced_prompt, turn_type="Final Ask", system_prompt="You are a knowledgeable and enthusiastic League of Legends expert, eager to help players understand the game better.", is_stream=True)
 
     def _analyze_knowledge_base_need(self, text):
         prompt = f"""Analyze if the following question requires information from knowledge bases:
@@ -171,10 +166,26 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
             logger.debug(f"Bedrock response: {full_response}")
             
             # Add turn to context if it's not an analysis
-            self.context.add_turn(turn_type, system_prompt, prompt, full_response)
+            if turn_type == "Final Ask":
+                self.context.add_turn(turn_type, system_prompt, prompt, full_response)
             
             return full_response
 
+    def _invoke_bedrock_with_queue(self, text, turn_type, system_prompt, is_stream=True):
+        response_queue = queue.Queue()
+        
+        def collect_full_response(stream):
+            full_response = ""
+            for event in stream:
+                chunk = BedrockModelsWrapper.get_stream_chunk(event)
+                if chunk:
+                    text = BedrockModelsWrapper.get_stream_text(chunk)
+                    full_response += text
+                    yield event
+            response_queue.put(full_response)
+
+        response_stream = self._invoke_bedrock(text, turn_type, system_prompt, is_stream)
+        return collect_full_response(response_stream), response_queue
 
     def _process_non_stream_response(self, response):
         response_body = json.loads(response.get('body').read())
