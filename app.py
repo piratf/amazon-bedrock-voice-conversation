@@ -6,42 +6,18 @@ import pyaudio
 import sys
 import boto3
 import sounddevice
+import traceback
+import requests
 
 from concurrent.futures import ThreadPoolExecutor
 from amazon_transcribe.client import TranscribeStreamingClient
 from amazon_transcribe.handlers import TranscriptResultStreamHandler
 from amazon_transcribe.model import TranscriptEvent, TranscriptResultStream
 
-from api_request_schema import api_request_list, get_model_ids
-
-model_id = os.getenv('MODEL_ID', 'anthropic.claude-v2:1')
-aws_region = os.getenv('AWS_REGION', 'ap-northeast-1')
-
-if model_id not in get_model_ids():
-    print(f'Error: Models ID {model_id} in not a valid model ID. Set MODEL_ID env var to one of {get_model_ids()}.')
-    sys.exit(0)
-
-api_request = api_request_list[model_id]
-config = {
-    'log_level': 'debug',  # One of: info, debug, none
-    'last_speech': "If you have any other questions, please don't hesitate to ask. Have a great day!",
-    'region': aws_region,
-    'polly': {
-        'Engine': 'neural',
-        'LanguageCode': 'en-US',
-        'VoiceId': 'Joanna',
-        'OutputFormat': 'pcm',
-    },
-    'translate': {
-        'SourceLanguageCode': 'en',
-        'TargetLanguageCode': 'en',
-    },
-    'bedrock': {
-        'response_streaming': True,
-        'api_request': api_request
-    }
-}
-
+from config import config, model_id, aws_region
+from logger import logger
+from bedrock_agent import BedrockAgent
+from bedrock_models_wrapper import BedrockModelsWrapper
 
 p = pyaudio.PyAudio()
 bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name=config['region'])
@@ -50,10 +26,10 @@ transcribe_streaming = TranscribeStreamingClient(region=config['region'])
 
 
 def printer(text, level):
-    if config['log_level'] == 'info' and level == 'info':
-        print(text)
-    elif config['log_level'] == 'debug' and level in ['info', 'debug']:
-        print(text)
+    if level == 'info':
+        logger.info(text)
+    elif level == 'debug':
+        logger.debug(text)
 
 
 class UserInputManager:
@@ -73,7 +49,7 @@ class UserInputManager:
     def start_user_input_loop():
         while True:
             sys.stdin.readline().strip()
-            printer(f'[DEBUG] User input to shut down executor...', 'debug')
+            logger.debug(f'User input to shut down executor...')
             UserInputManager.shutdown_executor = True
 
     @staticmethod
@@ -83,57 +59,6 @@ class UserInputManager:
     @staticmethod
     def is_shutdown_scheduled():
         return UserInputManager.shutdown_executor
-
-
-class BedrockModelsWrapper:
-
-    @staticmethod
-    def define_body(text):
-        model_id = config['bedrock']['api_request']['modelId']
-        model_provider = model_id.split('.')[0]
-        body = config['bedrock']['api_request']['body']
-
-        if model_provider == 'amazon':
-            body['inputText'] = text
-        elif model_provider == 'meta':
-            body['prompt'] = text
-        elif model_provider == 'anthropic':
-            body['prompt'] = f'\n\nHuman: {text}\n\nAssistant:'
-        elif model_provider == 'cohere':
-            body['prompt'] = text
-        else:
-            raise Exception('Unknown model provider.')
-
-        return body
-
-    @staticmethod
-    def get_stream_chunk(event):
-        return event.get('chunk')
-
-    @staticmethod
-    def get_stream_text(chunk):
-        model_id = config['bedrock']['api_request']['modelId']
-        model_provider = model_id.split('.')[0]
-
-        chunk_obj = ''
-        text = ''
-        if model_provider == 'amazon':
-            chunk_obj = json.loads(chunk.get('bytes').decode())
-            text = chunk_obj['outputText']
-        elif model_provider == 'meta':
-            chunk_obj = json.loads(chunk.get('bytes').decode())
-            text = chunk_obj['generation']
-        elif model_provider == 'anthropic':
-            chunk_obj = json.loads(chunk.get('bytes').decode())
-            text = chunk_obj['completion']
-        elif model_provider == 'cohere':
-            chunk_obj = json.loads(chunk.get('bytes').decode())
-            text = ' '.join([c["text"] for c in chunk_obj['generations']])
-        else:
-            raise NotImplementedError('Unknown model provider.')
-
-        printer(f'[DEBUG] {chunk_obj}', 'debug')
-        return text
 
 
 def to_audio_generator(bedrock_stream):
@@ -170,11 +95,11 @@ class BedrockWrapper:
         return self.speaking
 
     def invoke_bedrock(self, text):
-        printer('[DEBUG] Bedrock generation started', 'debug')
+        logger.debug('Bedrock generation started')
         self.speaking = True
 
         body = BedrockModelsWrapper.define_body(text)
-        printer(f"[DEBUG] Request body: {body}", 'debug')
+        logger.debug(f"Request body: {body}")
 
         try:
             body_json = json.dumps(body)
@@ -185,11 +110,11 @@ class BedrockWrapper:
                 contentType=config['bedrock']['api_request']['contentType']
             )
 
-            printer('[DEBUG] Capturing Bedrocks response/bedrock_stream', 'debug')
+            logger.debug('Capturing Bedrocks response/bedrock_stream')
             bedrock_stream = response.get('body')
 
             audio_gen = to_audio_generator(bedrock_stream)
-            printer('[DEBUG] Created bedrock stream to audio generator', 'debug')
+            logger.debug('Created bedrock stream to audio generator')
 
             reader = Reader()
             for audio in audio_gen:
@@ -198,14 +123,53 @@ class BedrockWrapper:
             reader.close()
 
         except Exception as e:
-            print(e)
+            logger.error(e)
             time.sleep(2)
             self.speaking = False
 
         time.sleep(1)
         self.speaking = False
-        printer('\n[DEBUG] Bedrock generation completed', 'debug')
+        logger.debug('Bedrock generation completed')
 
+    def invoke_bedrock_agent(self, text):
+        logger.debug('Bedrock Agent processing started')
+        self.speaking = True
+
+        try:
+            bedrock_agent = BedrockAgent(bedrock_runtime)
+            response_stream = bedrock_agent.process(text)
+            
+            logger.debug('Capturing Bedrock Agent response stream')
+            
+            audio_gen = to_audio_generator(response_stream)
+            logger.debug('Created Bedrock Agent response stream to audio generator')
+
+            reader = Reader()
+            for audio in audio_gen:
+                reader.read(audio)
+
+            reader.close()
+
+        except Exception as e:
+            logger.exception("An error occurred during Bedrock Agent processing:")
+            traceback.print_exc()  # This will print the full traceback to the console or log file
+            
+            # Optionally, you can add more specific error handling here
+            if isinstance(e, boto3.exceptions.Boto3Error):
+                logger.error("AWS Boto3 related error occurred. Please check your AWS credentials and permissions.")
+            elif isinstance(e, json.JSONDecodeError):
+                logger.error("JSON decoding error. The response from Bedrock Agent might be malformed.")
+            elif isinstance(e, requests.exceptions.RequestException):
+                logger.error("Network error occurred. Please check your internet connection.")
+            else:
+                logger.error(f"An unexpected error occurred: {str(e)}")
+            
+            time.sleep(2)
+            self.speaking = False
+
+        time.sleep(1)
+        self.speaking = False
+        logger.debug('Bedrock Agent processing completed')
 
 class Reader:
 
@@ -269,14 +233,14 @@ def stream_data(stream):
 
 
 def aws_polly_tts(polly_text):
-    printer(f'[INTO] Character count: {len(polly_text)}', 'debug')
+    logger.info(f'Character count: {len(polly_text)}')
     byte_stream_list = []
     polly_text_len = len(polly_text.split('.'))
-    printer(f'LEN polly_text_len: {polly_text_len}', 'debug')
+    logger.debug(f'LEN polly_text_len: {polly_text_len}')
     for i in range(0, polly_text_len, 20):
-        printer(f'{i}:{i + 20}', 'debug')
+        logger.debug(f'{i}:{i + 20}')
         polly_text_chunk = '. '.join(polly_text.split('. ')[i:i + 20])
-        printer(f'polly_text_chunk LEN: {len(polly_text_chunk)}', 'debug')
+        logger.debug(f'polly_text_chunk LEN: {len(polly_text_chunk)}')
 
         response = polly.synthesize_speech(
             Text=polly_text_chunk,
@@ -325,13 +289,12 @@ class EventHandler(TranscriptResultStreamHandler):
     async def handle_transcript_event(self, transcript_event: TranscriptEvent):
         results = transcript_event.transcript.results
         if not self.bedrock_wrapper.is_speaking():
-
             if results:
                 for result in results:
                     EventHandler.sample_count = 0
                     if not result.is_partial:
                         for alt in result.alternatives:
-                            print(alt.transcript, flush=True, end=' ')
+                            logger.info(f"Transcribed: {alt.transcript}")
                             EventHandler.text.append(alt.transcript)
 
             else:
@@ -339,21 +302,16 @@ class EventHandler(TranscriptResultStreamHandler):
                 if EventHandler.sample_count == EventHandler.max_sample_counter:
 
                     if len(EventHandler.text) == 0:
-                        # last_speech = config['last_speech']
-                        # print(last_speech, flush=True)
-                        # aws_polly_tts(last_speech)
-                        # os._exit(0)  # exit from a child process
                         EventHandler.sample_count = 0
                     else:
                         input_text = ' '.join(EventHandler.text)
-                        printer(f'\n[INFO] User input: {input_text}', 'info')
+                        logger.info(f"User input: {input_text}")
 
                         executor = ThreadPoolExecutor(max_workers=1)
-                        # Add executor so Bedrock execution can be shut down, if user input signals so.
                         UserInputManager.set_executor(executor)
                         loop.run_in_executor(
                             executor,
-                            self.bedrock_wrapper.invoke_bedrock,
+                            self.bedrock_wrapper.invoke_bedrock_agent,
                             input_text
                         )
 
@@ -398,16 +356,21 @@ class MicStream:
 
 info_text = f'''
 *************************************************************
-[INFO] Supported FM models: {get_model_ids()}.
-[INFO] Change FM model by setting <MODEL_ID> environment variable. Example: export MODEL_ID=meta.llama2-70b-chat-v1
+Welcome to your League of Legends Voice Chat Game Partner!
 
-[INFO] AWS Region: {config['region']}
-[INFO] Amazon Bedrock model: {config['bedrock']['api_request']['modelId']}
-[INFO] Polly config: engine {config['polly']['Engine']}, voice {config['polly']['VoiceId']}
-[INFO] Log level: {config['log_level']}
+I'm here to assist you with all things League of Legends.
+Whether you need strategy advice, champion information,
+or just want to chat about the game, I'm ready to help!
 
-[INFO] Hit ENTER to interrupt Amazon Bedrock. After you can continue speaking!
-[INFO] Go ahead with the voice chat with Amazon Bedrock!
+To start talking, simply speak into your microphone.
+I'll listen and respond to your questions and comments.
+
+Remember:
+- Hit ENTER at any time to interrupt me if needed.
+- After interrupting, you can continue speaking as normal.
+
+Let's dive into the world of League of Legends together!
+What would you like to talk about?
 *************************************************************
 '''
 print(info_text)
@@ -416,4 +379,13 @@ loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(MicStream().basic_transcribe())
 except (KeyboardInterrupt, Exception) as e:
-    print()
+    if isinstance(e, KeyboardInterrupt):
+        logger.info("KeyboardInterrupt detected. Exiting gracefully...")
+    else:
+        logger.error(f"An unexpected error occurred: {str(e)}")
+    
+    # Cleanup and exit
+    if UserInputManager.is_executor_set():
+        UserInputManager.start_shutdown_executor()
+    
+    logger.info("Exiting...")
