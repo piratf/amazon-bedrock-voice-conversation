@@ -73,14 +73,12 @@ class BedrockModelsWrapper:
                 text = chunk_obj.get('delta', {}).get('content', [{}])[0].get('text', '')
             else:
                 text = ''
-            logger.debug(f'Extracted text from Anthropic chunk: {text}')
         elif model_provider == 'cohere':
             chunk_obj = json.loads(chunk.get('bytes').decode())
             text = ' '.join([c["text"] for c in chunk_obj['generations']])
         else:
             raise NotImplementedError('Unknown model provider.')
 
-        logger.debug(f'Chunk object: {chunk_obj}')
         return text
 
     @staticmethod
