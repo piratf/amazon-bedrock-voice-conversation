@@ -1,12 +1,16 @@
 import json
 from logger import logger
-from config import config
+from config import config, change_model
 
 class BedrockModelsWrapper:
     @staticmethod
-    def define_body(text, context=None, system_prompt=None):
-        model_id = config['bedrock']['api_request']['modelId']
-        model_provider = model_id.split('.')[0]
+    def define_body(text, context=None, system_prompt=None, model_id=None):
+        if model_id is not None:
+            change_model(model_id)
+            logger.info(f"Use model {model_id}, {config['bedrock']['api_request']}")
+        model_id = model_id if model_id else config['bedrock']['api_request']['modelId']
+        current_model_id = model_id
+        model_provider = current_model_id.split('.')[0]
         body = config['bedrock']['api_request']['body'].copy()
 
         if model_provider == 'amazon':
