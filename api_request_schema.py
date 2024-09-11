@@ -48,10 +48,39 @@ api_request_list = {
         "contentType": "application/json",
         "accept": "*/*",
         "body": {
-            "prompt": "You are my friend and You'll watch me play league of legends and teach me how to play it better. You are a good player, you don't like long conversations, you can chat like human.",
             "max_tokens_to_sample": 300,
             "temperature": 0.5,
             "top_k": 250,
+            "top_p": 1,
+            "stop_sequences": [
+                "\n\nHuman:"
+            ],
+            "anthropic_version": "bedrock-2023-05-31"
+        }
+    },
+    'anthropic.claude-3-5-sonnet-20240620-v1:0': {
+        "modelId": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+        "contentType": "application/json",
+        "accept": "*/*",
+        "body": {
+            "max_tokens_to_sample": 300,
+            "temperature": 0.5,
+            "top_k": 250,
+            "top_p": 1,
+            "stop_sequences": [
+                "\n\nHuman:"
+            ],
+            "anthropic_version": "bedrock-2023-05-31"
+        }
+    },
+    'anthropic.claude-instant-v1': {
+        "modelId": "anthropic.claude-instant-v1",
+        "contentType": "application/json",
+        "accept": "*/*",
+        "body": {
+            "max_tokens_to_sample": 300,
+            "temperature": 0,
+            "top_k": 0,
             "top_p": 1,
             "stop_sequences": [
                 "\n\nHuman:"
