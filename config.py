@@ -28,3 +28,6 @@ config = {
         'api_request': api_request
     }
 }
+
+def change_model(model_id):
+    config['bedrock']['api_request'] = api_request_list[model_id]

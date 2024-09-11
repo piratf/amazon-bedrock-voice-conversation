@@ -90,6 +90,7 @@ class BedrockWrapper:
 
     def __init__(self):
         self.speaking = False
+        self.bedrock_agent = BedrockAgent(bedrock_runtime)
 
     def is_speaking(self):
         return self.speaking
@@ -136,8 +137,7 @@ class BedrockWrapper:
         self.speaking = True
 
         try:
-            bedrock_agent = BedrockAgent(bedrock_runtime)
-            response_stream = bedrock_agent.process(text)
+            response_stream = self.bedrock_agent.process(text)
             
             logger.debug('Capturing Bedrock Agent response stream')
             
@@ -354,7 +354,8 @@ class MicStream:
         await asyncio.gather(self.write_chunks(stream), handler.handle_events())
 
 
-info_text = f'''
+if __name__ == "__main__":
+    info_text = f'''
 *************************************************************
 Welcome to your League of Legends Voice Chat Game Partner!
 
@@ -373,19 +374,19 @@ Let's dive into the world of League of Legends together!
 What would you like to talk about?
 *************************************************************
 '''
-print(info_text)
+    print(info_text)
 
-loop = asyncio.get_event_loop()
-try:
-    loop.run_until_complete(MicStream().basic_transcribe())
-except (KeyboardInterrupt, Exception) as e:
-    if isinstance(e, KeyboardInterrupt):
-        logger.info("KeyboardInterrupt detected. Exiting gracefully...")
-    else:
-        logger.error(f"An unexpected error occurred: {str(e)}")
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(MicStream().basic_transcribe())
+    except (KeyboardInterrupt, Exception) as e:
+        if isinstance(e, KeyboardInterrupt):
+            logger.info("KeyboardInterrupt detected. Exiting gracefully...")
+        else:
+            logger.error(f"An unexpected error occurred: {str(e)}")
     
-    # Cleanup and exit
-    if UserInputManager.is_executor_set():
-        UserInputManager.start_shutdown_executor()
-    
-    logger.info("Exiting...")
+        # Cleanup and exit
+        if UserInputManager.is_executor_set():
+            UserInputManager.start_shutdown_executor()
+        
+        logger.info("Exiting...")
