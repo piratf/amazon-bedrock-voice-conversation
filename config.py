@@ -15,9 +15,11 @@ config = {
     'region': aws_region,
     'polly': {
         'Engine': 'neural',
-        'LanguageCode': 'en-US',
-        'VoiceId': 'Matthew',
+        'TranscribeLanguageCode': 'zh-CN',
+        'LanguageCode': 'cmn-CN',
+        'VoiceId': 'Zhiyu',
         'OutputFormat': 'pcm',
+        'speed': '110%',
     },
     'translate': {
         'SourceLanguageCode': 'en',

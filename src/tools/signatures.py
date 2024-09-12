@@ -154,7 +154,7 @@ tools = [
     },
     {
         "name": "get_all_items_brief",
-        "description": "Retrieves a brief overview of all items, including their name, base price, short description, tags, and available map names. This function provides a comprehensive summary of all items in the game.",
+        "description": "Retrieves a brief overview of all items, including their name, base price, total price including price of all required pre-items, short description, tags, and available map names. This function provides a comprehensive summary of all items in the game.",
         "input_schema": {
             "type": "object",
             "properties": {}

@@ -273,9 +273,9 @@ class MicStream:
         loop.run_in_executor(ThreadPoolExecutor(max_workers=1), UserInputManager.start_user_input_loop)
 
         stream = await transcribe_streaming.start_stream_transcription(
-            language_code="en-US",
+            language_code=config['polly']['TranscribeLanguageCode'],
             media_sample_rate_hz=16000,
-            media_encoding="pcm",
+            media_encoding=config['polly']['OutputFormat'],
         )
 
         handler = EventHandler(stream.output_stream, BedrockWrapper())

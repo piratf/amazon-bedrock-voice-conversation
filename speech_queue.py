@@ -26,6 +26,8 @@ class SpeechQueue:
             if not text.startswith('<speak>') or not text.endswith('</speak>'):
                 logger.error(f"Text contains <spark> but invalid: {text}")
                 text = re.sub(r'<[^>]+>', '', text)
+                logger.info(f"Text after clear tag: {text}")
+                text_type = 'text'
             
             current_time = time.time()
             if current_time - last_text_end_time < 1:

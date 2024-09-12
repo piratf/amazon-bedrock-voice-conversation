@@ -5,7 +5,7 @@ from logger import logger
 
 
 class ConversationContext:
-    def __init__(self, max_turns=5):
+    def __init__(self, max_turns=20):
         self.context = deque(maxlen=max_turns)
 
     def add_text_turn_v2(self, role, content):

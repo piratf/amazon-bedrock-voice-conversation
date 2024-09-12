@@ -168,6 +168,7 @@ def get_all_items_brief():
         i.name,
         i.short_description,
         ig.base_price,
+        ig.total_price,
         GROUP_CONCAT(DISTINCT it.tag) AS tags,
         GROUP_CONCAT(DISTINCT m.name) AS available_maps
     FROM 
