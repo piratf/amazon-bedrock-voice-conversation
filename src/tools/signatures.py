@@ -75,7 +75,84 @@ tools = [
             },
             "required": ["champion_name", "slot"]
         }
+    },
+    {
+        "name": "get_rune_path",
+        "description": "Retrieves information about a rune path by its name or key. This includes details like the path's id, key, icon, and name. Rune paths are the main categories of runes, such as Precision, Domination, Sorcery, Resolve, and Inspiration.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path_identifier": {
+                    "type": "string",
+                    "description": "The name or key of the rune path."
+                }
+            },
+            "required": ["path_identifier"]
+        }
+    },
+    {
+        "name": "get_runes_by_path",
+        "description": "Retrieves all runes associated with a specific rune path. This includes keystone runes and regular runes. For each rune, it provides details such as id, key, icon, name, short description, long description, slot information, and whether it's a keystone rune. The runes are organized by their slots within the path.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path_identifier": {
+                    "type": "string",
+                    "description": "The name or key of the rune path."
+                }
+            },
+            "required": ["path_identifier"]
+        }
+    },
+    {
+        "name": "get_rune_details",
+        "description": "Retrieves detailed information about a specific rune by its name or key. This includes the rune's id, key, icon, name, short description, long description, associated slot and path information, and whether it's a keystone rune.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "rune_identifier": {
+                    "type": "string",
+                    "description": "The name or key of the rune."
+                }
+            },
+            "required": ["rune_identifier"]
+        }
+    },
+    {
+        "name": "get_keystone_runes",
+        "description": "Retrieves all keystone runes across all rune paths. Keystone runes are the most powerful runes that define a player's playstyle. For each keystone rune, it provides details such as id, key, icon, name, short description, long description, and associated path information.",
+        "input_schema": {
+            "type": "object",
+            "properties": {}
+        }
+    },
+    {
+        "name": "get_runes_by_slot",
+        "description": "Retrieves all runes associated with a specific slot within a rune path. Slots represent different tiers or rows within a rune path. This function provides details for each rune in the specified slot, including id, key, icon, name, short description, long description, and whether it's a keystone rune.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path_identifier": {
+                    "type": "string",
+                    "description": "The name or key of the rune path."
+                },
+                "slot_number": {
+                    "type": "integer",
+                    "description": "The slot number within the rune path (usually 1-4, where 1 is typically for keystone runes)."
+                }
+            },
+            "required": ["path_identifier", "slot_number"]
+        }
+    },
+    {
+        "name": "get_all_runes_structured",
+        "description": "Retrieves a structured representation of all runes in the game, organized by rune paths and slots. This function provides a comprehensive overview of the entire rune system. The returned data structure is as follows:\n\n{\n  'rune_paths': [\n    {\n      'id': int,\n      'key': string,\n      'icon': string,\n      'name': string,\n      'slots': [\n        {\n          'slot_number': int,\n          'runes': [\n            {\n              'id': int,\n              'key': string,\n              'icon': string,\n              'name': string,\n              'short_desc': string,\n              'long_desc': string,\n              'is_keystone_rune': boolean\n            },\n            ...\n          ]\n        },\n        ...\n      ]\n    },\n    ...\n  ]\n}\n\nThis structure allows for easy navigation through all rune paths, their slots, and the runes within each slot. It's particularly useful for getting a complete picture of the rune system or for comparing runes across different paths and slots.",
+        "input_schema": {
+            "type": "object",
+            "properties": {}
+        }
     }
+
 ]
 
 # Convert the tools list to a JSON string
