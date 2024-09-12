@@ -86,8 +86,7 @@ class BedrockModelsWrapper:
 
         if context:
             for turn in context:
-                body["messages"].append({"role": "user", "content": turn['user']})
-                body["messages"].append({"role": "assistant", "content": turn['assistant']})
+                body["messages"].append(turn)
 
         body["messages"].append({"role": "user", "content": text})
 

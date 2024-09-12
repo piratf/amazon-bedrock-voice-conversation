@@ -173,17 +173,15 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
 
     # _invoke_bedrock will return a stream response if is_stream is True 
     # otherwise it will return a text response
-    def _invoke_bedrock(self, prompt, include_context=True, turn_type="Chat", is_stream=False, system_prompt=None, model_id=None, use_tools=False):
+    def _invoke_bedrock(self, prompt, include_context=True, turn_type="Chat", is_stream=False, system_prompt=None, model_id=None, use_tools=True):
         context = self.context.context if include_context else None
         body = BedrockModelsWrapper.define_body(prompt, context=context, system_prompt=system_prompt, model_id=model_id, use_tools=use_tools)
         body_json = json.dumps(body)
 
         logger.debug(f"Invoking Bedrock with body: {body_json}")
 
-        bedrock_stream = None
-        full_response = None
-        response = None
-
+        if turn_type=="Final Ask":
+            self.context.add_text_turn_v2("user", prompt)
         # if use_tools is true, it will continue to invoke bedrock until don't need to call any tools
         while True:
             response = self.bedrock_runtime.invoke_model(
@@ -210,15 +208,34 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
                         # Call the appropriate tool using the function dispatcher
                         tool_result = function_dispatcher(tool_name, **tool_input)
 
+                        # Add the tool use request to the messages
+                        tool_use_turn = {
+                            'role': 'assistant',
+                            'content': [{
+                                'type': 'tool_use',
+                                'id': tool_use_id,
+                                'name': tool_name,
+                                'input': tool_input
+                            }]
+                        }
+                        body['messages'].append(tool_use_turn)
+                        # We need to add tool_use to the context
+                        self.context.add_content_turn(tool_use_turn)
                         # Add the tool result to the messages and re-invoke the model
-                        body['messages'].append({
+                        tool_result_turn = {
                             'role': 'user',
                             'content': [{
                                 'type': 'tool_result',
                                 'tool_use_id': tool_use_id,
-                                'content': tool_result
+                                'content': json.dumps(tool_result)
                             }]
-                        })
+                        }
+                        body['messages'].append(tool_result_turn)
+                        self.context.add_content_turn(tool_result_turn)
+
+                        logger.info(f"Use tool: {tool_name}, input: {tool_input}")
+                        logger.debug(f"Tool result: {tool_result}")
+
                         body_json = json.dumps(body)
                         break
                 else:
@@ -232,8 +249,8 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
         logger.info(f"Text response: {text_response}")
         # Add turn to context if it's not an analysis
         if turn_type == "Final Ask":
-            self.context.add_turn(turn_type, system_prompt, prompt, text_response)
-        return text_response if not is_stream else bedrock_stream
+            self.context.add_text_turn_v2("assistant", text_response)
+        return text_response
 
     def _process_stream_response(self, bedrock_stream):
         full_response = ""
