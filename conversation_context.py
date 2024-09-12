@@ -2,15 +2,13 @@ from collections import deque
 import json
 
 class ConversationContext:
-    def __init__(self, max_turns=5):
+    def __init__(self, max_turns=20):
         self.context = deque(maxlen=max_turns)
 
-    def add_turn(self, turn_type, system_prompt, user_input, assistant_message):
-        self.context.append({
-            "type": turn_type,
-            "system": system_prompt,
-            "user": user_input,
-            "assistant": assistant_message
+    def add_text_turn_v2(self, role, content):
+        self.add_content_turn({
+            "role": role,
+            "content": content
         })
 
     def get_recent_history(self, num_turns=3):
@@ -33,3 +31,12 @@ class ConversationContext:
         context = cls()
         context.context = deque(json.loads(json_str), maxlen=context.context.maxlen)
         return context
+
+    def add_content_turn(self, turn):
+        self.context.append(turn)
+        self.auto_clean_context()
+
+    def auto_clean_context(self):
+        # Ensure the first message always has the "user" role
+        while self.context and self.context[0]['role'] != 'user':
+            self.context.popleft()

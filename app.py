@@ -155,8 +155,6 @@ class BedrockWrapper:
             # Get the full response from the queue
             logger.debug(f"Final question: {text}")
             logger.debug(f"Final response: {full_text_response}")
-            # Add the full response to the conversation context
-            self.bedrock_agent.context.add_turn("Final Response", "", text, full_text_response)
 
         except Exception as e:
             logger.exception("An error occurred during Bedrock Agent processing:")
@@ -186,7 +184,7 @@ class Reader:
         self.chunk = 1024
 
     def read(self, text, text_type='text'):
-        logger.info(f'text to speech: {text}, type: {text_type}')
+        logger.debug(f'text to speech: {text}, type: {text_type}')
         response = self.polly.synthesize_speech(
             Text=text,
             TextType=text_type,
