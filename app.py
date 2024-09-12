@@ -138,25 +138,25 @@ class BedrockWrapper:
         self.speaking = True
 
         try:
-            response_stream, response_queue = self.bedrock_agent.process(text)
+            full_text_response = self.bedrock_agent.process_with_tools(text)
             
             logger.debug('Capturing Bedrock Agent response stream')
-            
-            audio_gen = to_audio_generator(response_stream)
-            logger.debug('Created Bedrock Agent response stream to audio generator')
+
+            # check if there is any ssml tag in the response
+            text_type = 'text'
+            if '<speak>' in full_text_response:
+                text_type = 'ssml'
 
             reader = Reader()
-            for audio in audio_gen:
-                reader.read(audio)
+            reader.read(full_text_response, text_type=text_type)
 
             reader.close()
 
             # Get the full response from the queue
-            full_response = response_queue.get()
             logger.debug(f"Final question: {text}")
-            logger.debug(f"Final response: {full_response}")
+            logger.debug(f"Final response: {full_text_response}")
             # Add the full response to the conversation context
-            self.bedrock_agent.context.add_turn("Final Response", "", text, full_response)
+            self.bedrock_agent.context.add_turn("Final Response", "", text, full_text_response)
 
         except Exception as e:
             logger.exception("An error occurred during Bedrock Agent processing:")
@@ -185,11 +185,11 @@ class Reader:
         self.audio = p.open(format=pyaudio.paInt16, channels=1, rate=16000, output=True)
         self.chunk = 1024
 
-    def read(self, data):
-        logger.info(f'text to speech: {data}')
+    def read(self, text, text_type='text'):
+        logger.info(f'text to speech: {text}, type: {text_type}')
         response = self.polly.synthesize_speech(
-            Text=data,
-            TextType='text',
+            Text=text,
+            TextType=text_type,
             Engine=config['polly']['Engine'],
             LanguageCode=config['polly']['LanguageCode'],
             VoiceId=config['polly']['VoiceId'],

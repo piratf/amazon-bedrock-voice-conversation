@@ -16,7 +16,7 @@ config = {
     'polly': {
         'Engine': 'neural',
         'LanguageCode': 'en-US',
-        'VoiceId': 'Kevin',
+        'VoiceId': 'Matthew',
         'OutputFormat': 'pcm',
     },
     'translate': {
