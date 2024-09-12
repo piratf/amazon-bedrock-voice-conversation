@@ -14,11 +14,8 @@ def test_invoke_bedrock_agent():
         # "What items should I build for that champion?",
         # "How do I improve my last-hitting skills?",
         # "Thank you for your help!"
-        "Can you tell me a story about jax?",
-        "What is the background of jax?",
-        "What are the spells of jax?",
-        "What is the passive spell of jax?",
-        "What is the Q spell of jax?",
+        "I want to know about jax's story and spells",
+        "What items should I build for jax?",
     ]
 
     for i, test_input in enumerate(test_inputs, 1):

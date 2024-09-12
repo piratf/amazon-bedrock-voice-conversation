@@ -1,7 +1,7 @@
 import os
 from api_request_schema import api_request_list, get_model_ids
 
-model_id = os.getenv('MODEL_ID', 'anthropic.claude-v2:1')
+model_id = os.getenv('MODEL_ID', 'anthropic.claude-3-5-sonnet-20240620-v1:0')
 aws_region = os.getenv('AWS_REGION', 'ap-northeast-1')
 
 if model_id not in get_model_ids():
