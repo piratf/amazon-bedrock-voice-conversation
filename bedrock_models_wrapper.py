@@ -1,10 +1,51 @@
 import json
 from logger import logger
 from config import config, change_model
+from src.tools.signatures import tools
 
 class BedrockModelsWrapper:
     @staticmethod
-    def define_body(text, context=None, system_prompt=None, model_id=None):
+    def define_body_for_converse(prompt, context=None, system_prompt=None, model_id=None, use_tool=False):
+        messages = []
+
+        # Add history messages from context
+        if context:
+            for turn in context:
+                messages.append({
+                    'role': 'user' if turn['role'] == 'user' else 'assistant',
+                    'content': [{'text': turn['content']}]
+                })
+
+        # Add the current user message
+        messages.append({
+            'role': 'user',
+            'content': [{'text': prompt}]
+        })
+
+        system = [{'text': system_prompt}] if system_prompt else []
+
+        body = {
+            'modelId': model_id,
+            'messages': messages,
+            'system': system,
+            'inferenceConfig': {
+                'maxTokens': config['bedrock']['api_request'].get('maxTokens', 100),
+                'temperature': config['bedrock']['api_request'].get('temperature', 0.7),
+                'topP': config['bedrock']['api_request'].get('topP', 0.9),
+                'stopSequences': config['bedrock']['api_request'].get('stopSequences', [])
+            }
+        }
+
+        # Add tools if use_tool is True
+        if use_tool:
+            body['toolConfig'] = {
+                'tools': tools
+            }
+
+        return body
+
+    @staticmethod
+    def define_body(text, context=None, system_prompt=None, model_id=None, use_tools=False):
         if model_id is not None:
             change_model(model_id)
             logger.info(f"Use model {model_id}, {config['bedrock']['api_request']}")
@@ -18,7 +59,7 @@ class BedrockModelsWrapper:
         elif model_provider == 'meta':
             body['prompt'] = text
         elif model_provider == 'anthropic':
-            body = BedrockModelsWrapper._prepare_anthropic_body(text, context, body, system_prompt)
+            body = BedrockModelsWrapper._prepare_anthropic_body(text, context, body, system_prompt, use_tools)
         elif model_provider == 'cohere':
             body['prompt'] = text
         else:
@@ -27,7 +68,7 @@ class BedrockModelsWrapper:
         return body
 
     @staticmethod
-    def _prepare_anthropic_body(text, context, config_body, system_prompt):
+    def _prepare_anthropic_body(text, context, config_body, system_prompt, use_tools):
         body = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": config_body.get('max_tokens_to_sample', 300),
@@ -49,6 +90,10 @@ class BedrockModelsWrapper:
                 body["messages"].append({"role": "assistant", "content": turn['assistant']})
 
         body["messages"].append({"role": "user", "content": text})
+
+        # Add tools if use_tools is True
+        if use_tools:
+            body["tools"] = tools
 
         return body
 
