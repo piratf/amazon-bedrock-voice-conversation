@@ -13,14 +13,17 @@ class ConversationContext:
             "assistant": assistant_message
         })
 
-    def get_context_string(self):
-        context_str = ""
-        for turn in self.context:
-            if turn['system']:
-                context_str += f"System: {turn['system']}\n"
-            context_str += f"Human: {turn['user']}\n"
-            context_str += f"Assistant: {turn['assistant']}\n\n"
-        return context_str
+    def get_recent_history(self, num_turns=3):
+        # Get the specified number of recent turns, or all turns if less are available
+        recent_turns = list(self.context)[-num_turns:]
+        
+        # Format the turns into a string
+        formatted_history = ""
+        for turn in recent_turns:
+            formatted_history += f"Human: {turn['user']}\n"
+            formatted_history += f"AI: {turn['assistant']}\n\n"
+        
+        return formatted_history.strip()
 
     def to_json(self):
         return json.dumps(list(self.context))
