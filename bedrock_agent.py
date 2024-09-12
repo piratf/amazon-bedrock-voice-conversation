@@ -36,27 +36,35 @@ class BedrockAgent:
         else:
             logger.info("Processing as question")
             return self._solve_question(corrected_text)
-        
+
+    # To support tools, this function always return full text response
+    # The text response will have SSML tags for TTS
     def process_with_tools(self, text):
         corrected_text = self._fix_typos(text)
 
         return self._solve_question_with_tools(corrected_text)
 
     def _solve_question_with_tools(self, text):
-        enhanced_prompt = f"""You're a League of Legends expert. Provide the shortest possible accurate answer:
+        enhanced_prompt = f"""Respond briefly and casually to: {text}. Keep your answer short and friendly:"""
+        return self._invoke_bedrock(enhanced_prompt,
+                                    is_stream=False,
+                                    turn_type="Final Ask",
+                                    system_prompt="""You are a friendly AI assistant who's an expert in League of Legends. 
+                                    Keep your responses brief and to the point, ideally no more than 2-3 sentences. 
+                                    Use a casual, friendly tone. If the topic isn't about League, try to steer the conversation back to it when possible.
+                                    Be prepared to switch between light-hearted banter and in-depth game analysis as the conversation flows.  
+                                    Always format your responses using SSML tags.
+SSML formatting rules:
 
-User: {text}
-
-Instructions:
-1. Analyze the user's question to determine if any tools are needed.
-2. If tools are needed, use them and wait for the tool to return the result.
-3. The response from the tool will be used in next request.
-4. If no tools are needed, provide an answer based on your knowledge.
-5. Keep your response concise and directly related to the user's question.
-6. If you're unsure about any information, ask the user to clarify.
-
-Answer:"""
-        return self._invoke_bedrock_with_queue(enhanced_prompt, turn_type="Final Ask", system_prompt="You are a knowledgeable and enthusiastic League of Legends expert, eager to help players understand the game better by provide the shortest possible accurate answer.", use_tools=True)
+- Enclose all responses in <speak> tags
+- Use <p> tags for paragraphs or distinct thoughts
+- Insert <break> tags with specific timings (e.g., <break time="0.5s"/>) for natural pauses
+- Apply <prosody> tags for rate and volume adjustments only
+- Set the overall speech rate to 93% using <prosody rate="90%">
+- Use <prosody rate="slow"> or <prosody volume="soft"> for emphasis on key points
+- Ensure all tags are properly closed
+""",
+                                    use_tools=True)
 
     def _fix_typos(self, text):
         prompt = f"""
@@ -77,8 +85,8 @@ Output:
 """
         response = self._invoke_bedrock(prompt, include_context=True, turn_type="Spell Check", system_prompt="", is_stream=False, model_id="anthropic.claude-3-5-sonnet-20240620-v1:0")
 
-        logger.debug(f"Spell check input: {text}")
-        logger.debug(f"Spell check response: {response}")
+        logger.info(f"Spell check input: {text}")
+        logger.info(f"Spell check response: {response}")
         return response.strip()
 
     def _analyze_input(self, text):
@@ -178,25 +186,13 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
 
         # if use_tools is true, it will continue to invoke bedrock until don't need to call any tools
         while True:
-            if is_stream:
-                response = self.bedrock_runtime.invoke_model_with_response_stream(
-                    body=body_json,
-                    modelId=config['bedrock']['api_request']['modelId'],
-                    accept=config['bedrock']['api_request']['accept'],
-                    contentType=config['bedrock']['api_request']['contentType']
-                )
-                bedrock_stream = response.get('body')
-
-                return bedrock_stream
-
-            else:
-                response = self.bedrock_runtime.invoke_model(
-                    body=body_json,
-                    modelId=config['bedrock']['api_request']['modelId'],
-                    accept=config['bedrock']['api_request']['accept'],
-                    contentType=config['bedrock']['api_request']['contentType']
-                )
-                full_response = json.loads(response.get('body').read())
+            response = self.bedrock_runtime.invoke_model(
+                body=body_json,
+                modelId=config['bedrock']['api_request']['modelId'],
+                accept=config['bedrock']['api_request']['accept'],
+                contentType=config['bedrock']['api_request']['contentType']
+            )
+            full_response = json.loads(response.get('body').read())
 
             logger.debug(f"Bedrock response: {full_response}")
 
@@ -233,6 +229,7 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
                 break
 
         text_response = BedrockModelsWrapper.get_non_stream_text(full_response)
+        logger.info(f"Text response: {text_response}")
         # Add turn to context if it's not an analysis
         if turn_type == "Final Ask":
             self.context.add_turn(turn_type, system_prompt, prompt, text_response)
