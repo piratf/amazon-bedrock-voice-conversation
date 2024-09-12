@@ -64,7 +64,7 @@ api_request_list = {
         "accept": "*/*",
         "body": {
             "max_tokens_to_sample": 300,
-            "temperature": 0.5,
+            "temperature": 0,
             "top_k": 250,
             "top_p": 1,
             "stop_sequences": [

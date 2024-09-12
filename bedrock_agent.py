@@ -56,6 +56,7 @@ class BedrockAgent:
                                     Always format your responses using SSML tags.
 SSML formatting rules:
 
+- Begin all responses with <speak> tags
 - Enclose all responses in <speak> tags
 - Use <p> tags for paragraphs or distinct thoughts
 - Insert <break> tags with specific timings (e.g., <break time="0.5s"/>) for natural pauses

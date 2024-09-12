@@ -1,8 +1,11 @@
 from collections import deque
 import json
 
+from logger import logger
+
+
 class ConversationContext:
-    def __init__(self, max_turns=20):
+    def __init__(self, max_turns=5):
         self.context = deque(maxlen=max_turns)
 
     def add_text_turn_v2(self, role, content):
@@ -40,3 +43,7 @@ class ConversationContext:
         # Ensure the first message always has the "user" role
         while self.context and self.context[0]['role'] != 'user':
             self.context.popleft()
+            # If it is a tool_result message, remove it
+            if self.context and isinstance(self.context[0]['content'], list) and isinstance(self.context[0]['content'][0], dict) and self.context[0]['content'][0].get('type') == 'tool_result':
+                self.context.popleft()
+        logger.info(f"Context length: {len(self.context)}")
