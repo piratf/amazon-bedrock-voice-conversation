@@ -27,70 +27,13 @@ bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name=confi
 polly = boto3.client('polly', region_name=config['region'])
 transcribe_streaming = TranscribeStreamingClient(region=config['region'])
 
-
 def printer(text, level):
     if level == 'info':
         logger.info(text)
     elif level == 'debug':
         logger.debug(text)
 
-
-class UserInputManager:
-    shutdown_executor = False
-    executor = None
-
-    @staticmethod
-    def set_executor(executor):
-        UserInputManager.executor = executor
-
-    @staticmethod
-    def start_shutdown_executor():
-        UserInputManager.shutdown_executor = False
-        raise Exception()  # Workaround to shutdown exec, as executor.shutdown() doesn't work as expected.
-
-    @staticmethod
-    def start_user_input_loop():
-        while True:
-            sys.stdin.readline().strip()
-            logger.debug(f'User input to shut down executor...')
-            UserInputManager.shutdown_executor = True
-
-    @staticmethod
-    def is_executor_set():
-        return UserInputManager.executor is not None
-
-    @staticmethod
-    def is_shutdown_scheduled():
-        return UserInputManager.shutdown_executor
-
-
-def to_audio_generator(bedrock_stream):
-    prefix = ''
-
-    if bedrock_stream:
-        for event in bedrock_stream:
-            chunk = BedrockModelsWrapper.get_stream_chunk(event)
-            if chunk:
-                text = BedrockModelsWrapper.get_stream_text(chunk)
-
-                if '.' in text:
-                    a = text.split('.')[:-1]
-                    to_polly = ''.join([prefix, '.'.join(a), '. '])
-                    prefix = text.split('.')[-1]
-                    print(to_polly, flush=True, end='')
-                    yield to_polly
-                else:
-                    prefix = ''.join([prefix, text])
-
-        if prefix != '':
-            print(prefix, flush=True, end='')
-            yield f'{prefix}.'
-
-        print('\n')
-
-
 class BedrockWrapper:
-
     def __init__(self):
         self.speaking = False
         self.bedrock_agent = BedrockAgent(bedrock_runtime)
@@ -144,15 +87,8 @@ class BedrockWrapper:
             
             logger.debug('Capturing Bedrock Agent response stream')
 
-            # check if there is any ssml tag in the response
-            text_type = 'text'
-            if '<speak>' in full_text_response:
-                text_type = 'ssml'
-
-            reader = Reader()
-            reader.read(full_text_response, text_type=text_type)
-
-            reader.close()
+            self.bedrock_agent.speech_queue.add_text(full_text_response)
+            self.bedrock_agent.speech_queue.wait_until_done()
 
             # Get the full response from the queue
             logger.debug(f"Final question: {text}")
@@ -178,6 +114,29 @@ class BedrockWrapper:
         self.speaking = False
         logger.debug('Bedrock Agent processing completed')
 
+def to_audio_generator(bedrock_stream):
+    prefix = ''
+
+    if bedrock_stream:
+        for event in bedrock_stream:
+            chunk = BedrockModelsWrapper.get_stream_chunk(event)
+            if chunk:
+                text = BedrockModelsWrapper.get_stream_text(chunk)
+
+                if '.' in text:
+                    a = text.split('.')[:-1]
+                    to_polly = ''.join([prefix, '.'.join(a), '. '])
+                    prefix = text.split('.')[-1]
+                    print(to_polly, flush=True, end='')
+                    yield to_polly
+                else:
+                    prefix = ''.join([prefix, text])
+
+        if prefix != '':
+            print(prefix, flush=True, end='')
+            yield f'{prefix}.'
+
+        print('\n')
 
 def stream_data(stream):
     chunk = 1024
@@ -203,7 +162,6 @@ def stream_data(stream):
     else:
         # The stream passed in is empty
         pass
-
 
 def aws_polly_tts(polly_text):
     logger.info(f'Character count: {len(polly_text)}')
@@ -238,7 +196,6 @@ def aws_polly_tts(polly_text):
 
     read_byte_chunks(b''.join(byte_chunks))
 
-
 def read_byte_chunks(data):
     polly_stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, output=True)
     polly_stream.write(data)
@@ -247,7 +204,6 @@ def read_byte_chunks(data):
     polly_stream.stop_stream()
     polly_stream.close()
     time.sleep(1)
-
 
 class EventHandler(TranscriptResultStreamHandler):
     text = []
@@ -291,7 +247,6 @@ class EventHandler(TranscriptResultStreamHandler):
                     EventHandler.text.clear()
                     EventHandler.sample_count = 0
 
-
 class MicStream:
 
     async def mic_stream(self):
@@ -325,7 +280,6 @@ class MicStream:
 
         handler = EventHandler(stream.output_stream, BedrockWrapper())
         await asyncio.gather(self.write_chunks(stream), handler.handle_events())
-
 
 if __name__ == "__main__":
     info_text = f'''

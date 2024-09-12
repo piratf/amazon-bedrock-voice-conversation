@@ -11,12 +11,15 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from user_input_manager import UserInputManager
 from reader import Reader
+from speech_queue import SpeechQueue
 
 class BedrockAgent:
     def __init__(self, bedrock_runtime):
         self.bedrock_runtime = bedrock_runtime
         self.context = ConversationContext()
         self.knowledge_base = BedrockKnowledgeBase()
+        self.speech_queue = SpeechQueue()
+        self.executor = ThreadPoolExecutor(max_workers=5)
         logger.info("BedrockAgent initialized")
 
     def process(self, text):
@@ -51,7 +54,6 @@ class BedrockAgent:
     def _solve_question_with_tools(self, text):
         enhanced_prompt = f"""Respond briefly and casually to: {text}. Keep your answer short and friendly:"""
         return self._invoke_bedrock(enhanced_prompt,
-                                    is_stream=False,
                                     turn_type="Final Ask",
                                     system_prompt="""You are a friendly AI assistant who's an expert in League of Legends. 
                                     Keep your responses brief and to the point, ideally no more than 2-3 sentences. 
@@ -89,7 +91,8 @@ Current user input:
 
 Corrected output:
 """
-        response = self._invoke_bedrock(prompt, include_context=True, turn_type="Spell Check", system_prompt="", is_stream=False, model_id="anthropic.claude-3-5-sonnet-20240620-v1:0")
+        response = self._invoke_bedrock(prompt, include_context=True, turn_type="Spell Check", system_prompt="",
+                                        model_id="anthropic.claude-3-5-sonnet-20240620-v1:0")
 
         logger.info(f"Spell check input: {text}")
         logger.info(f"Spell check response: {response}")
@@ -113,7 +116,8 @@ Example output format:
     "explanation": "A brief explanation of your analysis"
 }}
 """
-        return self._invoke_bedrock(prompt, turn_type="Analysis", system_prompt="", is_stream=False, model_id="anthropic.claude-instant-v1")
+        return self._invoke_bedrock(prompt, turn_type="Analysis", system_prompt="",
+                                    model_id="anthropic.claude-instant-v1")
 
     def _chat_with_user(self, text):
         return self._invoke_bedrock_with_queue(text, turn_type="Final Ask", system_prompt="You are a friendly AI assistant.")
@@ -166,7 +170,7 @@ Available knowledge bases:
 
 Analyze the question and choose the most appropriate knowledge base IDs, or an empty list if none are relevant.
 """
-        response = self._invoke_bedrock(prompt, turn_type="KBAnalysis", system_prompt="You are an AI that determines if external knowledge is needed to answer questions.", is_stream=False)
+        response = self._invoke_bedrock(prompt, turn_type="KBAnalysis", system_prompt="You are an AI that determines if external knowledge is needed to answer questions.")
         return json.loads(response)
 
     def _fetch_from_knowledge_bases(self, kb_analysis, question):
@@ -177,9 +181,7 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
             return f"Relevant Knowledge Base Information:\n{formatted_results}"
         return ""
 
-    # _invoke_bedrock will return a stream response if is_stream is True
-    # otherwise it will return a text response
-    def _invoke_bedrock(self, prompt, include_context=True, turn_type="Chat", is_stream=False, system_prompt=None, model_id=None, use_tools=True):
+    def _invoke_bedrock(self, prompt, include_context=True, turn_type="Chat", system_prompt=None, model_id=None, use_tools=True):
         context = self.context.context if include_context else None
         body = BedrockModelsWrapper.define_body(prompt, context=context, system_prompt=system_prompt, model_id=model_id, use_tools=use_tools)
         body_json = json.dumps(body)
@@ -236,19 +238,12 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
                     'content': json.dumps(tool_result)
                 }
             
-            def read_text_response_with_tool_use(text_response):
-                logger.info(f"Reading text response with tool use: {text_response}")
-                reader = Reader()
-                reader.read(text_response)
-                reader.close()
+            self.speech_queue.add_text(text_response_with_tool_use)
 
             # Execute all tool calls concurrently using ThreadPoolExecutor
             with ThreadPoolExecutor() as executor:
                 tool_futures = [executor.submit(call_tool, tool_use) for tool_use in tool_uses]
-                read_future = executor.submit(read_text_response_with_tool_use, text_response_with_tool_use)
-                
                 tool_results = [future.result() for future in tool_futures]
-                read_future.result()  # Ensure the reading is complete
 
             # Record all tool results in a single context turn and update body
             tool_result_turn = {
@@ -297,7 +292,7 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
                     yield event
             response_queue.put(full_response)
 
-        response_stream = self._invoke_bedrock(text, turn_type, system_prompt, is_stream=True, use_tools=use_tools)
+        response_stream = self._invoke_bedrock(text, turn_type, system_prompt, use_tools=use_tools)
         return collect_full_response(response_stream), response_queue
 
     def _complete_question_for_kb(self, question):
@@ -315,7 +310,7 @@ New Question: {question}
 Complete Question:"""
 
         # Use Bedrock to generate the completed question
-        completed_question = self._invoke_bedrock(prompt, turn_type="Question Completion", system_prompt="You are an AI assistant that helps to provide context to questions based on conversation history.", is_stream=False)
+        completed_question = self._invoke_bedrock(prompt, turn_type="Question Completion", system_prompt="You are an AI assistant that helps to provide context to questions based on conversation history.")
 
         logger.debug(f"Original question: {question}")
         logger.debug(f"Completed question: {completed_question}")
