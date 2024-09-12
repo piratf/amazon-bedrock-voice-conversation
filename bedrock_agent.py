@@ -26,10 +26,10 @@ class BedrockAgent:
             analysis = json.loads(json_content)
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON content: {e}")
-            analysis = {"is_question": False, "is_about_lol": False, "explanation": "Error in parsing input"}
+            analysis = {"is_about_lol": False, "explanation": "Error in parsing input"}
             print(f"An error occurred while processing your input: {e}")
 
-        if not analysis.get("is_question", False):
+        if not analysis.get("is_about_lol", False):
             logger.info("Processing as chat")
             return self._chat_with_user(corrected_text)
         else:
@@ -73,7 +73,6 @@ Output the JSON ONLY.
 
 Example output format:
 {{
-    "is_question": boolean,
     "is_about_lol": boolean,
     "explanation": "A brief explanation of your analysis"
 }}
@@ -89,7 +88,10 @@ Example output format:
             "kb_ids": ["FQYOEZO3D0"],
         }
 
-        kb_content = self._fetch_from_knowledge_bases(kb_analysis, text) if kb_analysis['kb_needed'] else ""
+        # before fetching from knowledge bases, the question should be completed with the history of the conversation
+        completed_question = self._complete_question_for_kb(text)
+
+        kb_content = self._fetch_from_knowledge_bases(kb_analysis, completed_question) if kb_analysis['kb_needed'] else ""
 
         enhanced_prompt = f"""You're a League of Legends expert. Provide the shortest possible accurate answer:
 
@@ -135,6 +137,7 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
         if kb_analysis['kb_needed'] and kb_analysis['kb_ids']:
             results = self.knowledge_base.query_all(kb_analysis['kb_ids'], question, max_results_per_kb=10)
             formatted_results = self.knowledge_base.format_results(results, include_kb_id=True)
+            logger.debug(f"Knowledge base results: {formatted_results}")
             return f"Relevant Knowledge Base Information:\n{formatted_results}"
         return ""
 
@@ -190,3 +193,25 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
     def _process_non_stream_response(self, response):
         response_body = json.loads(response.get('body').read())
         return BedrockModelsWrapper.get_non_stream_text(response_body)
+
+    def _complete_question_for_kb(self, question):
+        # Get the recent conversation history
+        recent_history = self.context.get_recent_history(num_turns=10)  # Adjust the number of turns as needed
+
+        # Construct a prompt to complete the question
+        prompt = f"""Given the following conversation history and a new question, provide a more complete version of the question that incorporates relevant context from the conversation history. Do not answer the question, just reformulate it with added context if necessary.
+
+Conversation History:
+{recent_history}
+
+New Question: {question}
+
+Complete Question:"""
+
+        # Use Bedrock to generate the completed question
+        completed_question = self._invoke_bedrock(prompt, turn_type="Question Completion", system_prompt="You are an AI assistant that helps to provide context to questions based on conversation history.", is_stream=False)
+
+        logger.debug(f"Original question: {question}")
+        logger.debug(f"Completed question: {completed_question}")
+
+        return completed_question.strip()
