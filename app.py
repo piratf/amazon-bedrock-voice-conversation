@@ -186,8 +186,10 @@ class Reader:
         self.chunk = 1024
 
     def read(self, data):
+        logger.info(f'text to speech: {data}')
         response = self.polly.synthesize_speech(
             Text=data,
+            TextType='text',
             Engine=config['polly']['Engine'],
             LanguageCode=config['polly']['LanguageCode'],
             VoiceId=config['polly']['VoiceId'],
