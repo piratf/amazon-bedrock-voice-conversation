@@ -7,6 +7,10 @@ from bedrock_knowledge_base import BedrockKnowledgeBase
 from src.tools.function_dispatcher import function_dispatcher
 import queue
 import threading
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from user_input_manager import UserInputManager
+from reader import Reader
 
 class BedrockAgent:
     def __init__(self, bedrock_runtime):
@@ -173,7 +177,7 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
             return f"Relevant Knowledge Base Information:\n{formatted_results}"
         return ""
 
-    # _invoke_bedrock will return a stream response if is_stream is True 
+    # _invoke_bedrock will return a stream response if is_stream is True
     # otherwise it will return a text response
     def _invoke_bedrock(self, prompt, include_context=True, turn_type="Chat", is_stream=False, system_prompt=None, model_id=None, use_tools=True):
         context = self.context.context if include_context else None
@@ -182,9 +186,9 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
 
         logger.debug(f"Invoking Bedrock with body: {body_json}")
 
-        if turn_type=="Final Ask":
+        if turn_type == "Final Ask":
             self.context.add_text_turn_v2("user", prompt)
-        # if use_tools is true, it will continue to invoke bedrock until don't need to call any tools
+
         while True:
             response = self.bedrock_runtime.invoke_model(
                 body=body_json,
@@ -199,59 +203,72 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
             if not use_tools or full_response.get('stop_reason') != 'tool_use':
                 break
 
+            tool_uses = []
+            text_response_with_tool_use = ''
             if 'content' in full_response and isinstance(full_response['content'], list):
-                for content_block in full_response['content']:
-                    if content_block.get('type') == 'tool_use':
-                        tool_use = content_block
-                        tool_name = tool_use['name']
-                        tool_input = tool_use['input']
-                        tool_use_id = tool_use['id']
+                tool_uses = [content_block for content_block in full_response['content'] if content_block.get('type') == 'tool_use']
+                text_response_with_tool_use = ' '.join([text_block['text'] for text_block in full_response['content'] if text_block.get('type') == 'text'])
 
-                        # Call the appropriate tool using the function dispatcher
-                        tool_result = function_dispatcher(tool_name, **tool_input)
-
-                        # Add the tool use request to the messages
-                        tool_use_turn = {
-                            'role': 'assistant',
-                            'content': [{
-                                'type': 'tool_use',
-                                'id': tool_use_id,
-                                'name': tool_name,
-                                'input': tool_input
-                            }]
-                        }
-                        body['messages'].append(tool_use_turn)
-                        # We need to add tool_use to the context
-                        self.context.add_content_turn(tool_use_turn)
-                        # Add the tool result to the messages and re-invoke the model
-                        tool_result_turn = {
-                            'role': 'user',
-                            'content': [{
-                                'type': 'tool_result',
-                                'tool_use_id': tool_use_id,
-                                'content': json.dumps(tool_result)
-                            }]
-                        }
-                        body['messages'].append(tool_result_turn)
-                        self.context.add_content_turn(tool_result_turn)
-
-                        logger.info(f"Use tool: {tool_name}, input: {tool_input}")
-                        logger.debug(f"Tool result: {tool_result}")
-
-                        body_json = json.dumps(body)
-                        break
-                else:
-                    # If no tool_use was found, we have our final response
-                    break
-            else:
-                # If there's no content list, we have our final response
+            if not tool_uses:
+                logger.error(f"No tool uses found in the tool_use response, content: {full_response}")
                 break
+
+            # Record all tool uses in a single context turn
+            tool_use_turn = {
+                'role': 'assistant',
+                'content': full_response['content']
+            }
+            self.context.add_content_turn(tool_use_turn)
+            body['messages'].append(tool_use_turn)
+
+            # Prepare concurrent tool calls
+            def call_tool(tool_use):
+                tool_name = tool_use['name']
+                tool_input = tool_use['input']
+                tool_use_id = tool_use['id']
+                logger.info(f"Use tool: {tool_name} with input: {tool_input}")
+                # Call the appropriate tool using the function dispatcher
+                tool_result = function_dispatcher(tool_name, **tool_input)
+                
+                return {
+                    'type': 'tool_result',
+                    'tool_use_id': tool_use_id,
+                    'content': json.dumps(tool_result)
+                }
+            
+            def read_text_response_with_tool_use(text_response):
+                logger.info(f"Reading text response with tool use: {text_response}")
+                reader = Reader()
+                reader.read(text_response)
+                reader.close()
+
+            # Execute all tool calls concurrently using ThreadPoolExecutor
+            with ThreadPoolExecutor() as executor:
+                tool_futures = [executor.submit(call_tool, tool_use) for tool_use in tool_uses]
+                read_future = executor.submit(read_text_response_with_tool_use, text_response_with_tool_use)
+                
+                tool_results = [future.result() for future in tool_futures]
+                read_future.result()  # Ensure the reading is complete
+
+            # Record all tool results in a single context turn and update body
+            tool_result_turn = {
+                'role': 'user',
+                'content': tool_results
+            }
+            self.context.add_content_turn(tool_result_turn)
+            body['messages'].append(tool_result_turn)
+
+            for result in tool_results:
+                logger.debug(f"Tool result: {result['content']}")
+
+            body_json = json.dumps(body)
 
         text_response = BedrockModelsWrapper.get_non_stream_text(full_response)
         logger.info(f"Text response: {text_response}")
-        # Add turn to context if it's not an analysis
+        
         if turn_type == "Final Ask":
             self.context.add_text_turn_v2("assistant", text_response)
+        
         return text_response
 
     def _process_stream_response(self, bedrock_stream):
@@ -269,7 +286,7 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
 
     def _invoke_bedrock_with_queue(self, text, turn_type, system_prompt, use_tools=False):
         response_queue = queue.Queue()
-        
+
         def collect_full_response(stream):
             full_response = ""
             for event in stream:
