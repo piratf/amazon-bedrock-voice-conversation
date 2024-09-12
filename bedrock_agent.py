@@ -102,7 +102,7 @@ Example output format:
         return self._invoke_bedrock(prompt, turn_type="Analysis", system_prompt="", is_stream=False, model_id="anthropic.claude-instant-v1")
 
     def _chat_with_user(self, text):
-        return self._invoke_bedrock_with_queue(text, turn_type="Final Ask", system_prompt="You are a friendly AI assistant.", is_stream=True)
+        return self._invoke_bedrock_with_queue(text, turn_type="Final Ask", system_prompt="You are a friendly AI assistant.")
 
     def _solve_question(self, text):
         kb_analysis = {
@@ -129,8 +129,6 @@ Instructions:
 4. If there are any ambiguities or multiple interpretations of the question, address the most likely interpretation.
 5. Provide specific examples or references from the game when relevant.
 6. If the question cannot be answered with the given information, explain why and suggest what additional information might be needed.
-
-You response will be used in the AWS Polly tool to generate speech. Insert SSML tags as needed.
 
 Answer:"""
         return self._invoke_bedrock_with_queue(enhanced_prompt, turn_type="Final Ask", system_prompt="You are a knowledgeable and enthusiastic League of Legends expert, eager to help players understand the game better.")
@@ -167,7 +165,7 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
 
     # _invoke_bedrock will return a stream response if is_stream is True 
     # otherwise it will return a text response
-    def _invoke_bedrock(self, prompt, include_context=True, turn_type="Chat", is_stream=False, system_prompt=None, model_id=None, use_tools=True):
+    def _invoke_bedrock(self, prompt, include_context=True, turn_type="Chat", is_stream=False, system_prompt=None, model_id=None, use_tools=False):
         context = self.context.context if include_context else None
         body = BedrockModelsWrapper.define_body(prompt, context=context, system_prompt=system_prompt, model_id=model_id, use_tools=use_tools)
         body_json = json.dumps(body)
@@ -253,7 +251,7 @@ Analyze the question and choose the most appropriate knowledge base IDs, or an e
         response_body = json.loads(response.get('body').read())
         return BedrockModelsWrapper.get_non_stream_text(response_body)
 
-    def _invoke_bedrock_with_queue(self, text, turn_type, system_prompt, use_tools=True):
+    def _invoke_bedrock_with_queue(self, text, turn_type, system_prompt, use_tools=False):
         response_queue = queue.Queue()
         
         def collect_full_response(stream):

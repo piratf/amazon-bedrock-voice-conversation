@@ -26,7 +26,7 @@ def setup_logger():
 
     # Create a stream handler for console output
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.DEBUG)  # You can adjust this level as needed
+    console_handler.setLevel(logging.INFO)  # You can adjust this level as needed
     console_handler.setFormatter(formatter)
 
     # Add the handlers to the logger
