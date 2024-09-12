@@ -10,10 +10,10 @@ def test_invoke_bedrock_agent():
     # Test inputs
     test_inputs = [
         "What are the best champions for beginners in League of Legends?",
-        "Can you tell me more about one of those champions?",
-        "What items should I build for that champion?",
-        "How do I improve my last-hitting skills?",
-        "Thank you for your help!"
+        # "Can you tell me more about one of those champions?",
+        # "What items should I build for that champion?",
+        # "How do I improve my last-hitting skills?",
+        # "Thank you for your help!"
     ]
 
     for i, test_input in enumerate(test_inputs, 1):

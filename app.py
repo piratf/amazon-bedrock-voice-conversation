@@ -18,6 +18,7 @@ from config import config, model_id, aws_region
 from logger import logger
 from bedrock_agent import BedrockAgent
 from bedrock_models_wrapper import BedrockModelsWrapper
+from src.tools.db_manager import SingletonDatabaseConnection
 
 p = pyaudio.PyAudio()
 bedrock_runtime = boto3.client(service_name='bedrock-runtime', region_name=config['region'])
@@ -381,6 +382,9 @@ What would you like to talk about?
 *************************************************************
 '''
     print(info_text)
+
+    # Initialize the database connection
+    db = SingletonDatabaseConnection()
 
     loop = asyncio.get_event_loop()
     try:
