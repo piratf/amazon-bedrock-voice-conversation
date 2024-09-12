@@ -73,5 +73,23 @@ function_signatures = {
             },
             "required": ["question"]
         }
+    },
+    "get_runes": {
+        "name": "get_runes",
+        "description": "Retrieve rune information based on optional filters such as path ID or key. If no filters are provided, all runes are returned. The function joins the `runes`, `rune_slots`, and `rune_paths` tables to provide comprehensive rune details, including the rune path name. The fields returned are: rune ID, rune key, rune icon, rune name, short description, long description, and rune path name.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "rune_path_name": {
+                    "type": "integer",
+                    "description": "The ID of the rune path to filter runes by."
+                },
+                "rune_name": {
+                    "type": "string",
+                    "description": "The key of the rune to filter runes by."
+                }
+            },
+            "required": []
+        }
     }
 }
