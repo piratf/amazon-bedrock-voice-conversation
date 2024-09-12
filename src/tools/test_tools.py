@@ -16,3 +16,6 @@ test_function("get_rune_details", rune_identifier="Electrocute")
 test_function("get_keystone_runes")
 test_function("get_runes_by_slot", path_identifier="Sorcery", slot_number=2)
 test_function("get_all_runes_structured")
+
+# Test new get_all_items_brief function
+test_function("get_all_items_brief")

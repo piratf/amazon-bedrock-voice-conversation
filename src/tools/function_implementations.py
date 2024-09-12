@@ -160,3 +160,45 @@ def get_all_runes_structured() -> dict:
         current_slot['runes'].append(rune)
 
     return structured_runes
+
+def get_all_items_brief():
+    query = """
+    SELECT 
+        i.id,
+        i.name,
+        i.short_description,
+        ig.base_price,
+        GROUP_CONCAT(DISTINCT it.tag) AS tags,
+        GROUP_CONCAT(DISTINCT m.name) AS available_maps
+    FROM 
+        items i
+    LEFT JOIN 
+        item_gold ig ON i.id = ig.item_id
+    LEFT JOIN 
+        item_tags it ON i.id = it.item_id
+    LEFT JOIN 
+        item_maps im ON i.id = im.item_id
+    LEFT JOIN 
+        maps m ON im.map_id = m.id
+    WHERE 
+        im.is_enabled = 1
+    GROUP BY 
+        i.id
+    ORDER BY 
+        i.name
+    """
+    
+    items = execute_query(query)
+    
+    for item in items:
+        if item['tags']:
+            item['tags'] = item['tags'].split(',')
+        else:
+            item['tags'] = []
+        
+        if item['available_maps']:
+            item['available_maps'] = item['available_maps'].split(',')
+        else:
+            item['available_maps'] = []
+    
+    return items

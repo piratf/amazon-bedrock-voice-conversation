@@ -1,7 +1,7 @@
 from src.tools.function_implementations import (
     get_champion_stat, get_champion_spells, get_champion_story, get_champions_background, 
     get_champion_spell_by_slot, get_rune_path, get_runes_by_path, get_rune_details, 
-    get_keystone_runes, get_runes_by_slot, get_all_runes_structured
+    get_keystone_runes, get_runes_by_slot, get_all_runes_structured, get_all_items_brief
 )
 
 def function_dispatcher(function_name: str, **kwargs):
@@ -16,7 +16,8 @@ def function_dispatcher(function_name: str, **kwargs):
         "get_rune_details": lambda: get_rune_details(kwargs.get("rune_identifier")),
         "get_keystone_runes": get_keystone_runes,
         "get_runes_by_slot": lambda: get_runes_by_slot(kwargs.get("path_identifier"), kwargs.get("slot_number")),
-        "get_all_runes_structured": get_all_runes_structured
+        "get_all_runes_structured": get_all_runes_structured,
+        "get_all_items_brief": get_all_items_brief
     }
 
     if function_name in function_map:
